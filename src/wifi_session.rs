@@ -126,8 +126,8 @@ where
         &self.adapter.clock
     }
 
-    pub fn socket_timeout(&self) -> u64 {
-        self.adapter.socket_timeout
+    pub fn timeout(&self) -> Option<u64> {
+        self.adapter.timeout
     }
 
     fn reader(&self) -> &ReaderPart<Rx, N> {

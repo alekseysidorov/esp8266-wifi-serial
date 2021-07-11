@@ -9,10 +9,14 @@ use crate::{
     reader_part::{ReadData, ReaderPart},
 };
 
+/// Raw response to a sent AT command.
 pub type RawResponse<'a, const N: usize> = core::result::Result<ReadData<'a, N>, ReadData<'a, N>>;
 
 const NEWLINE: &[u8] = b"\r\n";
 
+/// Basic communication interface with the esp8266 adapter.
+///
+/// Provides basic functionality for sending AT commands and getting corresponding responses.
 #[derive(Debug)]
 pub struct Adapter<Rx, Tx, C, const N: usize>
 where
@@ -23,7 +27,7 @@ where
     pub(crate) reader: ReaderPart<Rx, N>,
     pub(crate) writer: WriterPart<Tx>,
     pub(crate) clock: C,
-    pub(crate) socket_timeout: u64,
+    pub(crate) timeout: Option<u64>,
 }
 
 impl<'a, Rx, Tx, C, const N: usize> Adapter<Rx, Tx, C, N>
@@ -32,12 +36,13 @@ where
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub fn new(rx: Rx, tx: Tx, clock: C, socket_timeout: u64) -> Result<Self> {
+    /// Establishes serial communication with the esp8266 adapter.
+    pub fn new(rx: Rx, tx: Tx, clock: C) -> Result<Self> {
         let mut adapter = Self {
             reader: ReaderPart::new(rx),
             writer: WriterPart { tx },
             clock,
-            socket_timeout,
+            timeout: None,
         };
         adapter.init()?;
         Ok(adapter)
@@ -55,6 +60,14 @@ where
         Ok(())
     }
 
+    /// Sets the operation timeout to the timeout specified.
+    ///
+    /// If the specified value is `None`, the operations will block infinitely.
+    pub fn set_timeout(&mut self, us: Option<u64>) {
+        self.timeout = us;
+    }
+
+    /// Performs the adapter resetting routine.
     pub fn reset(&mut self) -> Result<()> {
         // FIXME: It is ok to receive errors like "framing" during the reset procedure.
         self.reset_cmd().ok();
@@ -67,12 +80,13 @@ where
         Ok(())
     }
 
-    // FIXME: Get rid of the necessity of the manual `clear_reader_buf` invocations.
+    /// Sends a simple AT command string and gets the raw response for it.
     pub fn send_at_command_str(&mut self, cmd: &str) -> Result<RawResponse<'_, N>> {
         self.write_command(cmd.as_ref())?;
         self.read_until(OkCondition)
     }
 
+    /// Sends a formatted AT command string and gets the raw response for it.
     pub fn send_at_command_fmt(
         &mut self,
         args: core::fmt::Arguments,
@@ -99,7 +113,9 @@ where
     where
         T: Condition<'b, N>,
     {
-        let deadline = Deadline::new(&self.clock, self.socket_timeout);
+        let clock = &self.clock;
+        let deadline = self.timeout.map(|timeout| Deadline::new(clock, timeout));
+
         loop {
             match self.reader.read_bytes() {
                 Ok(_) => {
@@ -117,7 +133,9 @@ where
                 break;
             }
 
-            deadline.reached().map_err(|_| Error::Timeout)?;
+            if let Some(deadline) = deadline.as_ref() {
+                deadline.reached().map_err(|_| Error::Timeout)?;
+            }
         }
 
         let read_data = ReadData::new(self.reader.buf_mut());
