@@ -13,9 +13,9 @@ pub mod error;
 
 mod adapter;
 mod parser;
+mod reader_part;
 mod softap;
 mod wifi_session;
-mod reader_part;
 
 #[cfg(test)]
 mod tests;

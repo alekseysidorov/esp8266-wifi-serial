@@ -37,7 +37,6 @@ where
         self.adapter
             .send_at_command_fmt(format_args!("AT+CIPSERVER=1,{}", port))?
             .expect("Malformed command");
-        self.adapter.clear_reader_buf();
 
         // Get assigned IP address.
         let ip = self
@@ -58,7 +57,6 @@ where
                 address.port(),
             ))?
             .expect("Malformed command");
-        self.adapter.clear_reader_buf();
 
         Ok(())
     }
@@ -85,9 +83,7 @@ where
 
                     Event::DataAvailable {
                         link_id,
-                        data: ReadData {
-                            inner: reader.buf_mut(),
-                        },
+                        data: ReadData::new(reader.buf_mut()),
                     }
                 }
                 CommandResponse::WifiDisconnect => return Err(nb::Error::WouldBlock),
@@ -123,7 +119,6 @@ where
         self.adapter
             .read_until(OkCondition)?
             .expect("Malformed command");
-        self.adapter.clear_reader_buf();
         Ok(())
     }
 

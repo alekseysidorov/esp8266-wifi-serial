@@ -6,10 +6,10 @@ use simple_clock::{Deadline, SimpleClock};
 use crate::{
     error::{Error, Result},
     parser::CifsrResponse,
-    reader_part::ReaderPart,
+    reader_part::{ReadData, ReaderPart},
 };
 
-pub type RawResponse<'a> = core::result::Result<&'a [u8], &'a [u8]>;
+pub type RawResponse<'a, const N: usize> = core::result::Result<ReadData<'a, N>, ReadData<'a, N>>;
 
 const NEWLINE: &[u8] = b"\r\n";
 
@@ -24,8 +24,6 @@ where
     pub(crate) writer: WriterPart<Tx>,
     pub(crate) clock: C,
     pub(crate) socket_timeout: u64,
-
-    cmd_read_finished: bool,
 }
 
 impl<'a, Rx, Tx, C, const N: usize> Adapter<Rx, Tx, C, N>
@@ -38,7 +36,6 @@ where
         let mut adapter = Self {
             reader: ReaderPart::new(rx),
             writer: WriterPart { tx },
-            cmd_read_finished: false,
             clock,
             socket_timeout,
         };
@@ -71,12 +68,15 @@ where
     }
 
     // FIXME: Get rid of the necessity of the manual `clear_reader_buf` invocations.
-    pub fn send_at_command_str(&mut self, cmd: &str) -> Result<RawResponse<'_>> {
+    pub fn send_at_command_str(&mut self, cmd: &str) -> Result<RawResponse<'_, N>> {
         self.write_command(cmd.as_ref())?;
         self.read_until(OkCondition)
     }
 
-    pub fn send_at_command_fmt(&mut self, args: core::fmt::Arguments) -> Result<RawResponse<'_>> {
+    pub fn send_at_command_fmt(
+        &mut self,
+        args: core::fmt::Arguments,
+    ) -> Result<RawResponse<'_, N>> {
         self.write_command_fmt(args)?;
         self.read_until(OkCondition)
     }
@@ -95,19 +95,10 @@ where
         self.writer.write_bytes(NEWLINE)
     }
 
-    pub(crate) fn clear_reader_buf(&mut self) {
-        self.cmd_read_finished = false;
-        self.reader.clear();
-    }
-
     pub(crate) fn read_until<'b, T>(&'b mut self, condition: T) -> Result<T::Output>
     where
-        T: Condition<'b>,
+        T: Condition<'b, N>,
     {
-        if self.cmd_read_finished {
-            self.clear_reader_buf();
-        }
-
         let deadline = Deadline::new(&self.clock, self.socket_timeout);
         loop {
             match self.reader.read_bytes() {
@@ -118,20 +109,19 @@ where
                 }
                 Err(nb::Error::WouldBlock) => {}
                 Err(nb::Error::Other(_)) => {
-                    self.cmd_read_finished = true;
                     return Err(Error::ReadBuffer);
                 }
             };
 
             if condition.is_performed(&self.reader.buf()) {
-                self.cmd_read_finished = true;
                 break;
             }
 
             deadline.reached().map_err(|_| Error::Timeout)?;
         }
 
-        Ok(condition.output(&self.reader.buf()))
+        let read_data = ReadData::new(self.reader.buf_mut());
+        Ok(condition.output(read_data))
     }
 
     pub(crate) fn get_softap_address(&mut self) -> Result<CifsrResponse> {
@@ -140,18 +130,17 @@ where
             .send_at_command_fmt(format_args!("AT+CIFSR"))?
             .expect("Malformed command");
 
-        let resp = CifsrResponse::parse(raw_resp).expect("Unknown response").1;
-        self.clear_reader_buf();
+        let resp = CifsrResponse::parse(&raw_resp).expect("Unknown response").1;
         Ok(resp)
     }
 }
 
-pub(crate) trait Condition<'a>: Copy + Clone {
+pub(crate) trait Condition<'a, const N: usize>: Copy {
     type Output: 'a;
 
     fn is_performed(self, buf: &[u8]) -> bool;
 
-    fn output(self, buf: &'a [u8]) -> Self::Output;
+    fn output(self, buf: ReadData<'a, N>) -> Self::Output;
 }
 
 #[derive(Clone, Copy)]
@@ -161,15 +150,16 @@ impl ReadyCondition {
     const MSG: &'static [u8] = b"ready\r\n";
 }
 
-impl<'a> Condition<'a> for ReadyCondition {
-    type Output = &'a [u8];
+impl<'a, const N: usize> Condition<'a, N> for ReadyCondition {
+    type Output = ReadData<'a, N>;
 
     fn is_performed(self, buf: &[u8]) -> bool {
         buf.ends_with(Self::MSG)
     }
 
-    fn output(self, buf: &'a [u8]) -> Self::Output {
-        &buf[0..buf.len() - Self::MSG.len()]
+    fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {
+        buf.subslice(0, buf.len() - Self::MSG.len());
+        buf
     }
 }
 
@@ -180,15 +170,16 @@ impl CarretCondition {
     const MSG: &'static [u8] = b"> ";
 }
 
-impl<'a> Condition<'a> for CarretCondition {
-    type Output = &'a [u8];
+impl<'a, const N: usize> Condition<'a, N> for CarretCondition {
+    type Output = ReadData<'a, N>;
 
     fn is_performed(self, buf: &[u8]) -> bool {
         buf.ends_with(Self::MSG)
     }
 
-    fn output(self, buf: &'a [u8]) -> Self::Output {
-        &buf[0..buf.len() - Self::MSG.len()]
+    fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {
+        buf.subslice(0, buf.len() - Self::MSG.len());
+        buf
     }
 }
 
@@ -200,18 +191,20 @@ impl OkCondition {
     const ERROR: &'static [u8] = b"ERROR\r\n";
 }
 
-impl<'a> Condition<'a> for OkCondition {
-    type Output = core::result::Result<&'a [u8], &'a [u8]>;
+impl<'a, const N: usize> Condition<'a, N> for OkCondition {
+    type Output = RawResponse<'a, N>;
 
     fn is_performed(self, buf: &[u8]) -> bool {
         buf.ends_with(Self::OK) || buf.ends_with(Self::ERROR)
     }
 
-    fn output(self, buf: &'a [u8]) -> Self::Output {
+    fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {
         if buf.ends_with(Self::OK) {
-            Ok(&buf[0..buf.len() - Self::OK.len()])
+            buf.subslice(0, buf.len() - Self::OK.len());
+            Ok(buf)
         } else {
-            Err(&buf[0..buf.len() - Self::ERROR.len()])
+            buf.subslice(0, buf.len() - Self::ERROR.len());
+            Err(buf)
         }
     }
 }

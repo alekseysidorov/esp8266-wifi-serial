@@ -61,13 +61,28 @@ where
 /// Buffer with the incoming data received from the module over the serial port.
 ///
 /// A user should handle this data, otherwise, it will be discarded.
+#[derive(Debug)]
 pub struct ReadData<'a, const N: usize> {
-    pub(crate) inner: &'a mut Vec<u8, N>,
+    inner: &'a mut Vec<u8, N>,
+    from: usize,
+    to: usize,
+}
+
+impl<'a, const N: usize> ReadData<'a, N> {
+    pub(crate) fn new(inner: &'a mut Vec<u8, N>) -> Self {
+        let to = inner.len();
+        Self { inner, from: 0, to }
+    }
+
+    pub(crate) fn subslice(&mut self, from: usize, to: usize) {
+        self.from = from;
+        self.to = to;
+    }
 }
 
 impl<'a, const N: usize> AsRef<[u8]> for ReadData<'a, N> {
     fn as_ref(&self) -> &[u8] {
-        self.inner.as_ref()
+        &self.inner[self.from..self.to]
     }
 }
 

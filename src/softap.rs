@@ -64,7 +64,6 @@ impl<'a> SoftApConfig<'a> {
             ))?
             .expect("Malformed command");
 
-        adapter.clear_reader_buf();
         Ok(())
     }
 }
@@ -115,7 +114,6 @@ impl<'a> JoinApConfig<'a> {
                 self.ssid, self.password,
             ))?
             .expect("Malformed command");
-        adapter.clear_reader_buf();
 
         Ok(())
     }
