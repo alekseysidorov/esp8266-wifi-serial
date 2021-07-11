@@ -1,32 +1,33 @@
 use core::format_args;
 
 use embedded_hal::serial;
+use heapless::Vec;
 use no_std_net::SocketAddr;
 use simple_clock::SimpleClock;
 
 use crate::{
     adapter::{Adapter, CarretCondition, OkCondition},
     parser::CommandResponse,
-    reader_part::{ReadBuf, ReadData, ReaderPart},
+    reader_part::{ReadData, ReaderPart},
     Error,
 };
 
-pub struct WifiSession<'a, Rx, Tx, C>
+pub struct WifiSession<Rx, Tx, C, const N: usize>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    adapter: Adapter<'a, Rx, Tx, C>,
+    adapter: Adapter<Rx, Tx, C, N>,
 }
 
-impl<'a, Rx, Tx, C> WifiSession<'a, Rx, Tx, C>
+impl<Rx, Tx, C, const N: usize> WifiSession<Rx, Tx, C, N>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub(crate) fn new(mut adapter: Adapter<'a, Rx, Tx, C>) -> Self {
+    pub(crate) fn new(mut adapter: Adapter<Rx, Tx, C, N>) -> Self {
         adapter.reader.clear();
         Self { adapter }
     }
@@ -62,8 +63,9 @@ where
         Ok(())
     }
 
-    pub fn poll_next_event(&'a mut self) -> nb::Result<Event<'a>, Error> {
+    pub fn poll_next_event(&mut self) -> nb::Result<Event<'_, N>, Error> {
         let reader = self.reader_mut();
+
         let response =
             CommandResponse::parse(reader.buf()).map(|(remainder, event)| (remainder.len(), event));
 
@@ -78,7 +80,7 @@ where
                     let current_pos = reader.buf().len();
                     for _ in current_pos..size {
                         let byte = nb::block!(reader.read_byte())?;
-                        reader.buf_mut().push(byte)?;
+                        reader.buf_mut().push(byte).map_err(|_| Error::BufferFull)?;
                     }
 
                     Event::DataAvailable {
@@ -133,24 +135,30 @@ where
         self.adapter.socket_timeout
     }
 
-    fn reader(&self) -> &ReaderPart<'a, Rx> {
+    fn reader(&self) -> &ReaderPart<Rx, N> {
         &self.adapter.reader
     }
 
-    fn reader_mut(&mut self) -> &mut ReaderPart<'a, Rx> {
+    fn reader_mut(&mut self) -> &mut ReaderPart<Rx, N> {
         &mut self.adapter.reader
     }
 }
 
-pub enum Event<'a> {
-    Connected { link_id: usize },
-    Closed { link_id: usize },
-    DataAvailable { link_id: usize, data: ReadData<'a> },
+pub enum Event<'a, const N: usize> {
+    Connected {
+        link_id: usize,
+    },
+    Closed {
+        link_id: usize,
+    },
+    DataAvailable {
+        link_id: usize,
+        data: ReadData<'a, N>,
+    },
 }
 
 // FIXME: Reduce complexity of this operation.
-fn truncate_buf(part: &mut ReadBuf<'_>, at: usize) {
-    let buf = part.as_mut();
+fn truncate_buf<const N: usize>(buf: &mut Vec<u8, N>, at: usize) {
     let buf_len = buf.len();
 
     assert!(at <= buf_len);
@@ -163,6 +171,6 @@ fn truncate_buf(part: &mut ReadBuf<'_>, at: usize) {
     // Safety: `u8` is aprimitive type and doesn't have drop implementation so we can just
     // modify the buffer length.
     unsafe {
-        part.set_len(buf_len - at);
+        buf.set_len(buf_len - at);
     }
 }

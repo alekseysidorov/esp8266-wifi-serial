@@ -1,104 +1,36 @@
 //! Reader part of the esp8266 WiFi implementation.
 
-use core::ops::{Deref, DerefMut};
+use core::ops::Deref;
 
 use embedded_hal::serial;
+use heapless::Vec;
 
 use crate::Error;
 
-/// A simple `heapless::Vec` alternative backed by the borrowed bytes slice.
 #[derive(Debug)]
-pub struct ReadBuf<'a> {
-    inner: &'a mut [u8],
-    len: usize,
-}
-
-impl<'a> ReadBuf<'a> {
-    pub fn new(inner: &'a mut [u8]) -> Self {
-        Self { inner, len: 0 }
-    }
-
-    pub fn push(&mut self, byte: u8) -> Result<(), Error> {
-        if self.len == self.inner.len() {
-            return Err(Error::BufferFull);
-        }
-
-        // Safety: we have already checked if this buffer is full,
-        // a couple of lines above.
-        unsafe {
-            self.push_unchecked(byte);
-        }
-        Ok(())
-    }
-
-    pub unsafe fn push_unchecked(&mut self, byte: u8) {
-        *self.inner.get_unchecked_mut(self.len) = byte;
-        self.len += 1;
-    }
-
-    pub fn clear(&mut self) {
-        self.len = 0;
-    }
-
-    pub fn is_full(&self) -> bool {
-        self.len == self.inner.len()
-    }
-
-    pub unsafe fn set_len(&mut self, new_len: usize) {
-        self.len = new_len;
-    }
-}
-
-impl<'a> AsRef<[u8]> for ReadBuf<'a> {
-    fn as_ref(&self) -> &[u8] {
-        &self.inner[0..self.len]
-    }
-}
-
-impl<'a> AsMut<[u8]> for ReadBuf<'a> {
-    fn as_mut(&mut self) -> &mut [u8] {
-        &mut self.inner[0..self.len]
-    }
-}
-
-impl<'a> Deref for ReadBuf<'a> {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.as_ref()
-    }
-}
-
-impl<'a> DerefMut for ReadBuf<'a> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        self.as_mut()
-    }
-}
-
-#[derive(Debug)]
-pub(crate) struct ReaderPart<'a, Rx> {
+pub(crate) struct ReaderPart<Rx, const N: usize> {
     rx: Rx,
-    buf: ReadBuf<'a>,
+    buf: Vec<u8, N>,
 }
 
-impl<'a, Rx> ReaderPart<'a, Rx> {
-    pub fn buf(&self) -> &ReadBuf<'a> {
+impl<Rx, const N: usize> ReaderPart<Rx, N> {
+    pub fn buf(&self) -> &Vec<u8, N> {
         &self.buf
     }
 
-    pub fn buf_mut(&mut self) -> &mut ReadBuf<'a> {
+    pub fn buf_mut(&mut self) -> &mut Vec<u8, N> {
         &mut self.buf
     }
 }
 
-impl<'a, Rx> ReaderPart<'a, Rx>
+impl<Rx, const N: usize> ReaderPart<Rx, N>
 where
     Rx: serial::Read<u8> + 'static,
 {
-    pub fn new(rx: Rx, buf: &'a mut [u8]) -> Self {
+    pub fn new(rx: Rx) -> Self {
         Self {
             rx,
-            buf: ReadBuf::new(buf),
+            buf: Vec::new(),
         }
     }
 
@@ -129,23 +61,23 @@ where
 /// Buffer with the incoming data received from the module over the serial port.
 ///
 /// A user should handle this data, otherwise, it will be discarded.
-pub struct ReadData<'a> {
-    pub(crate) inner: &'a mut ReadBuf<'a>,
+pub struct ReadData<'a, const N: usize> {
+    pub(crate) inner: &'a mut Vec<u8, N>,
 }
 
-impl<'a> AsRef<[u8]> for ReadData<'a> {
+impl<'a, const N: usize> AsRef<[u8]> for ReadData<'a, N> {
     fn as_ref(&self) -> &[u8] {
         self.inner.as_ref()
     }
 }
 
-impl<'a> Drop for ReadData<'a> {
+impl<'a, const N: usize> Drop for ReadData<'a, N> {
     fn drop(&mut self) {
         self.inner.clear()
     }
 }
 
-impl<'a> Deref for ReadData<'a> {
+impl<'a, const N: usize> Deref for ReadData<'a, N> {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {

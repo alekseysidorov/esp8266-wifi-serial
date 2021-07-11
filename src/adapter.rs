@@ -14,13 +14,13 @@ pub type RawResponse<'a> = core::result::Result<&'a [u8], &'a [u8]>;
 const NEWLINE: &[u8] = b"\r\n";
 
 #[derive(Debug)]
-pub struct Adapter<'a, Rx, Tx, C>
+pub struct Adapter<Rx, Tx, C, const N: usize>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub(crate) reader: ReaderPart<'a, Rx>,
+    pub(crate) reader: ReaderPart<Rx, N>,
     pub(crate) writer: WriterPart<Tx>,
     pub(crate) clock: C,
     pub(crate) socket_timeout: u64,
@@ -28,15 +28,15 @@ where
     cmd_read_finished: bool,
 }
 
-impl<'a, Rx, Tx, C> Adapter<'a, Rx, Tx, C>
+impl<'a, Rx, Tx, C, const N: usize> Adapter<Rx, Tx, C, N>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub fn new(buf: &'a mut [u8], rx: Rx, tx: Tx, clock: C, socket_timeout: u64) -> Result<Self> {
+    pub fn new(rx: Rx, tx: Tx, clock: C, socket_timeout: u64) -> Result<Self> {
         let mut adapter = Self {
-            reader: ReaderPart::new(rx, buf),
+            reader: ReaderPart::new(rx),
             writer: WriterPart { tx },
             cmd_read_finished: false,
             clock,

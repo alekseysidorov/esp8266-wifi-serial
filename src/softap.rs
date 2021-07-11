@@ -24,10 +24,10 @@ pub struct SoftApConfig<'a> {
 }
 
 impl<'a> SoftApConfig<'a> {
-    pub fn start<Rx, Tx, C>(
+    pub fn start<Rx, Tx, C, const N: usize>(
         self,
-        mut adapter: Adapter<Rx, Tx, C>,
-    ) -> crate::Result<WifiSession<Rx, Tx, C>>
+        mut adapter: Adapter<Rx, Tx, C, N>,
+    ) -> crate::Result<WifiSession<Rx, Tx, C, N>>
     where
         Rx: serial::Read<u8> + 'static,
         Tx: serial::Write<u8> + 'static,
@@ -37,7 +37,10 @@ impl<'a> SoftApConfig<'a> {
         Ok(WifiSession::new(adapter))
     }
 
-    fn init<Rx, Tx, C>(&self, adapter: &mut Adapter<Rx, Tx, C>) -> crate::Result<()>
+    fn init<Rx, Tx, C, const N: usize>(
+        &self,
+        adapter: &mut Adapter<Rx, Tx, C, N>,
+    ) -> crate::Result<()>
     where
         Rx: serial::Read<u8> + 'static,
         Tx: serial::Write<u8> + 'static,
@@ -73,10 +76,10 @@ pub struct JoinApConfig<'a> {
 }
 
 impl<'a> JoinApConfig<'a> {
-    pub fn join<Rx, Tx, C>(
+    pub fn join<Rx, Tx, C, const N: usize>(
         self,
-        mut adapter: Adapter<Rx, Tx, C>,
-    ) -> crate::Result<WifiSession<Rx, Tx, C>>
+        mut adapter: Adapter<Rx, Tx, C, N>,
+    ) -> crate::Result<WifiSession<Rx, Tx, C, N>>
     where
         Rx: serial::Read<u8> + 'static,
         Tx: serial::Write<u8> + 'static,
@@ -86,7 +89,10 @@ impl<'a> JoinApConfig<'a> {
         Ok(WifiSession::new(adapter))
     }
 
-    fn init<Rx, Tx, C>(&self, adapter: &mut Adapter<Rx, Tx, C>) -> crate::Result<()>
+    fn init<Rx, Tx, C, const N: usize>(
+        &self,
+        adapter: &mut Adapter<Rx, Tx, C, N>,
+    ) -> crate::Result<()>
     where
         Rx: serial::Read<u8> + 'static,
         Tx: serial::Write<u8> + 'static,
