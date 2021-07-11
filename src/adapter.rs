@@ -1,13 +1,12 @@
 use core::fmt::Write;
 
 use embedded_hal::serial;
-use heapless::Vec;
 use simple_clock::{Deadline, SimpleClock};
 
 use crate::{
     error::{Error, Result},
     parser::CifsrResponse,
-    ADAPTER_BUF_CAPACITY,
+    reader_part::ReaderPart,
 };
 
 pub type RawResponse<'a> = core::result::Result<&'a [u8], &'a [u8]>;
@@ -15,33 +14,30 @@ pub type RawResponse<'a> = core::result::Result<&'a [u8], &'a [u8]>;
 const NEWLINE: &[u8] = b"\r\n";
 
 #[derive(Debug)]
-pub struct Adapter<Rx, Tx, C>
+pub struct Adapter<'a, Rx, Tx, C>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub(crate) reader: ReadPart<Rx>,
-    pub(crate) writer: WritePart<Tx>,
+    pub(crate) reader: ReaderPart<'a, Rx>,
+    pub(crate) writer: WriterPart<Tx>,
     pub(crate) clock: C,
     pub(crate) socket_timeout: u64,
 
     cmd_read_finished: bool,
 }
 
-impl<Rx, Tx, C> Adapter<Rx, Tx, C>
+impl<'a, Rx, Tx, C> Adapter<'a, Rx, Tx, C>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub fn new(rx: Rx, tx: Tx, clock: C, socket_timeout: u64) -> Result<Self> {
+    pub fn new(buf: &'a mut [u8], rx: Rx, tx: Tx, clock: C, socket_timeout: u64) -> Result<Self> {
         let mut adapter = Self {
-            reader: ReadPart {
-                buf: Vec::default(),
-                rx,
-            },
-            writer: WritePart { tx },
+            reader: ReaderPart::new(rx, buf),
+            writer: WriterPart { tx },
             cmd_read_finished: false,
             clock,
             socket_timeout,
@@ -69,7 +65,6 @@ where
         for _ in 0..100 {
             self.send_at_command_str("ATE1").ok();
         }
-        self.reader.buf.clear();
 
         self.disable_echo()?;
         Ok(())
@@ -102,16 +97,12 @@ where
 
     pub(crate) fn clear_reader_buf(&mut self) {
         self.cmd_read_finished = false;
-        // Safety: `u8` is aprimitive type and doesn't have drop implementation so we can just
-        // modify the buffer length.
-        unsafe {
-            self.reader.buf.set_len(0);
-        }
+        self.reader.clear();
     }
 
-    pub(crate) fn read_until<'a, T>(&'a mut self, condition: T) -> Result<T::Output>
+    pub(crate) fn read_until<'b, T>(&'b mut self, condition: T) -> Result<T::Output>
     where
-        T: Condition<'a>,
+        T: Condition<'b>,
     {
         if self.cmd_read_finished {
             self.clear_reader_buf();
@@ -121,7 +112,7 @@ where
         loop {
             match self.reader.read_bytes() {
                 Ok(_) => {
-                    if self.reader.buf.is_full() {
+                    if self.reader.buf().is_full() {
                         return Err(Error::BufferFull);
                     }
                 }
@@ -132,7 +123,7 @@ where
                 }
             };
 
-            if condition.is_performed(&self.reader.buf) {
+            if condition.is_performed(&self.reader.buf()) {
                 self.cmd_read_finished = true;
                 break;
             }
@@ -140,7 +131,7 @@ where
             deadline.reached().map_err(|_| Error::Timeout)?;
         }
 
-        Ok(condition.output(&self.reader.buf))
+        Ok(condition.output(&self.reader.buf()))
     }
 
     pub(crate) fn get_softap_address(&mut self) -> Result<CifsrResponse> {
@@ -226,37 +217,11 @@ impl<'a> Condition<'a> for OkCondition {
 }
 
 #[derive(Debug)]
-pub struct ReadPart<Rx> {
-    pub(crate) rx: Rx,
-    pub(crate) buf: Vec<u8, ADAPTER_BUF_CAPACITY>,
-}
-
-impl<Rx> ReadPart<Rx>
-where
-    Rx: serial::Read<u8> + 'static,
-{
-    pub(crate) fn read_bytes(&mut self) -> nb::Result<(), crate::Error> {
-        loop {
-            if self.buf.is_full() {
-                return Err(nb::Error::WouldBlock);
-            }
-
-            let byte = self.rx.read().map_err(|x| x.map(|_| Error::ReadBuffer))?;
-            // Safety: we have already checked if this buffer is full,
-            // a couple of lines above.
-            unsafe {
-                self.buf.push_unchecked(byte);
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct WritePart<Tx> {
+pub struct WriterPart<Tx> {
     tx: Tx,
 }
 
-impl<Tx> WritePart<Tx>
+impl<Tx> WriterPart<Tx>
 where
     Tx: serial::Write<u8> + 'static,
 {
