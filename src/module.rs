@@ -15,9 +15,10 @@ pub type RawResponse<'a, const N: usize> = core::result::Result<ReadData<'a, N>,
 /// The trait describes how to send a certain AT command.
 pub trait AtCommand: private::Sealed {
     /// Sends the AT command and gets a corresponding response.
+    #[doc(hidden)]
     fn send<Rx, Tx, C, const N: usize>(
         self,
-        adapter: &mut Module<Rx, Tx, C, N>,
+        module: &mut Module<Rx, Tx, C, N>,
     ) -> Result<RawResponse<'_, N>>
     where
         Rx: serial::Read<u8> + 'static,
@@ -28,28 +29,28 @@ pub trait AtCommand: private::Sealed {
 impl AtCommand for &str {
     fn send<Rx, Tx, C, const N: usize>(
         self,
-        adapter: &mut Module<Rx, Tx, C, N>,
+        module: &mut Module<Rx, Tx, C, N>,
     ) -> Result<RawResponse<'_, N>>
     where
         Rx: serial::Read<u8> + 'static,
         Tx: serial::Write<u8> + 'static,
         C: SimpleClock,
     {
-        adapter.send_at_command_str(self)
+        module.send_at_command_str(self)
     }
 }
 
 impl AtCommand for core::fmt::Arguments<'_> {
     fn send<Rx, Tx, C, const N: usize>(
         self,
-        adapter: &mut Module<Rx, Tx, C, N>,
+        module: &mut Module<Rx, Tx, C, N>,
     ) -> Result<RawResponse<'_, N>>
     where
         Rx: serial::Read<u8> + 'static,
         Tx: serial::Write<u8> + 'static,
         C: SimpleClock,
     {
-        adapter.send_at_command_fmt(self)
+        module.send_at_command_fmt(self)
     }
 }
 
@@ -79,14 +80,14 @@ where
 {
     /// Establishes serial communication with the esp8266 module.
     pub fn new(rx: Rx, tx: Tx, clock: C) -> Result<Self> {
-        let mut adapter = Self {
+        let mut module = Self {
             reader: ReaderPart::new(rx),
             writer: WriterPart { tx },
             clock,
             timeout: None,
         };
-        adapter.init()?;
-        Ok(adapter)
+        module.init()?;
+        Ok(module)
     }
 
     fn init(&mut self) -> Result<()> {
@@ -108,7 +109,7 @@ where
         self.timeout = us;
     }
 
-    /// Performs the adapter resetting routine.
+    /// Performs the module resetting routine.
     pub fn reset(&mut self) -> Result<()> {
         // FIXME: It is ok to receive errors like "framing" during the reset procedure.
         self.reset_cmd().ok();

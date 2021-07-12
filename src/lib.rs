@@ -1,7 +1,7 @@
 #![cfg_attr(not(test), no_std)]
 
 pub use crate::{
-    module::Module,
+    module::{Module, AtCommand},
     error::{Error, Result},
     reader_part::ReadData,
     softap::{JoinApConfig, SoftApConfig, WifiMode},

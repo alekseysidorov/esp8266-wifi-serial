@@ -12,6 +12,7 @@ use crate::{
     Error,
 };
 
+/// A session with the typical network operations.
 pub struct NetworkSession<Rx, Tx, C, const N: usize>
 where
     Rx: serial::Read<u8> + 'static,
@@ -31,6 +32,8 @@ where
         Self { module }
     }
 
+    /// Begins to listen to the incoming TCP connections on the specified port and returns
+    /// the IP address that is being listened to.
     pub fn listen(&mut self, port: u16) -> crate::Result<SocketAddr> {
         // Setup a TCP server.
         self.module
@@ -46,7 +49,10 @@ where
         Ok(SocketAddr::new(ip, port))
     }
 
-    pub fn connect_to(&mut self, link_id: usize, address: SocketAddr) -> crate::Result<()> {
+    /// Establishes a TCP connection with the specified IP address, link identifier will
+    /// be associated with the given IP address. 
+    /// Then it will be possible to [send](Self::send) data using this link ID.
+    pub fn connect(&mut self, link_id: usize, address: SocketAddr) -> crate::Result<()> {
         self.module
             .send_at_command(format_args!(
                 "AT+CIPSTART={},\"{}\",\"{}\",{}",
@@ -60,6 +66,7 @@ where
         Ok(())
     }
 
+    /// Non-blocking polling to get a new network event.
     pub fn poll_network_event(&mut self) -> nb::Result<NetworkEvent<'_, N>, Error> {
         let reader = self.reader_mut();
 
@@ -95,7 +102,12 @@ where
         Err(nb::Error::WouldBlock)
     }
 
-    pub fn send_to<I>(&mut self, link_id: usize, bytes: I) -> crate::Result<()>
+    /// Sends data packet via the TCP socket with the link given identifier.
+    /// 
+    /// # Notes
+    /// 
+    /// No more than 2048 bytes can be sent at a time.
+    pub fn send<I>(&mut self, link_id: usize, bytes: I) -> crate::Result<()>
     where
         I: Iterator<Item = u8> + ExactSizeIterator,
     {
@@ -121,10 +133,12 @@ where
         Ok(())
     }
 
+    /// Returns a reference to underlying clock instance.
     pub fn clock(&self) -> &C {
         &self.module.clock
     }
 
+    /// Returns an operations timeout.
     pub fn timeout(&self) -> Option<u64> {
         self.module.timeout
     }
@@ -138,15 +152,23 @@ where
     }
 }
 
+/// Incoming network event.
 pub enum NetworkEvent<'a, const N: usize> {
+    /// A new peer connected.
     Connected {
+        /// Connection identifier.
         link_id: usize,
     },
+    /// The connection with the peer is closed.
     Closed {
+        /// Connection identifier.
         link_id: usize,
     },
+    /// Bytes received from the peer.
     DataAvailable {
+        /// Connection identifier.
         link_id: usize,
+        /// Received data.
         data: ReadData<'a, N>,
     },
 }
