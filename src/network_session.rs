@@ -2,15 +2,21 @@ use core::format_args;
 
 use embedded_hal::serial;
 use heapless::Vec;
-use no_std_net::SocketAddr;
 use simple_clock::SimpleClock;
 
 use crate::{
-    module::{Module, CarretCondition, OkCondition},
+    module::{CarretCondition, Module, OkCondition},
     parser::CommandResponse,
     reader_part::{ReadData, ReaderPart},
     Error,
+    net::{IpAddr, SocketAddr},
 };
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct SessionInfo {
+    pub softap_address: Option<IpAddr>,
+    pub listen_address: IpAddr,
+}
 
 /// A session with the typical network operations.
 pub struct NetworkSession<Rx, Tx, C, const N: usize>
@@ -32,25 +38,18 @@ where
         Self { module }
     }
 
-    /// Begins to listen to the incoming TCP connections on the specified port and returns
-    /// the IP address that is being listened to.
-    pub fn listen(&mut self, port: u16) -> crate::Result<SocketAddr> {
+    /// Begins to listen to the incoming TCP connections on the specified port.
+    pub fn listen(&mut self, port: u16) -> crate::Result<()> {
         // Setup a TCP server.
         self.module
             .send_at_command(format_args!("AT+CIPSERVER=1,{}", port))?
             .expect("Malformed command");
 
-        // Get assigned IP address.
-        let ip = self
-            .module
-            .get_softap_address()?
-            .ap_ip
-            .expect("the IP address for this access point did't assign.");
-        Ok(SocketAddr::new(ip, port))
+        Ok(())
     }
 
     /// Establishes a TCP connection with the specified IP address, link identifier will
-    /// be associated with the given IP address. 
+    /// be associated with the given IP address.
     /// Then it will be possible to [send](Self::send) data using this link ID.
     pub fn connect(&mut self, link_id: usize, address: SocketAddr) -> crate::Result<()> {
         self.module
@@ -103,9 +102,9 @@ where
     }
 
     /// Sends data packet via the TCP socket with the link given identifier.
-    /// 
+    ///
     /// # Notes
-    /// 
+    ///
     /// No more than 2048 bytes can be sent at a time.
     pub fn send<I>(&mut self, link_id: usize, bytes: I) -> crate::Result<()>
     where
@@ -133,6 +132,15 @@ where
         Ok(())
     }
 
+    /// Gets network session information.
+    pub fn get_info(&mut self) -> crate::Result<SessionInfo> {
+        let info = self.module.get_network_info()?;
+        Ok(SessionInfo {
+            softap_address: info.ap_ip,
+            listen_address: info.sta_ip
+        })
+    }
+
     /// Returns a reference to underlying clock instance.
     pub fn clock(&self) -> &C {
         &self.module.clock
@@ -153,6 +161,7 @@ where
 }
 
 /// Incoming network event.
+#[derive(Debug)]
 pub enum NetworkEvent<'a, const N: usize> {
     /// A new peer connected.
     Connected {

@@ -1,5 +1,6 @@
-use no_std_net::{IpAddr, Ipv4Addr};
 use nom::{alt, char, character::streaming::digit1, do_parse, named, opt, tag, IResult};
+
+use crate::net::{IpAddr, Ipv4Addr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CommandResponse {
@@ -94,7 +95,7 @@ impl CommandResponse {
 
 pub struct CifsrResponse {
     pub ap_ip: Option<IpAddr>,
-    pub sta_ip: Option<IpAddr>,
+    pub sta_ip: IpAddr,
 }
 
 named!(
@@ -143,7 +144,7 @@ named!(
     do_parse!(
         opt!(crlf)
             >> ap_ip: opt!(parse_apip)
-            >> sta_ip: opt!(parse_staip)
+            >> sta_ip: parse_staip
             >> (CifsrResponse { ap_ip, sta_ip })
     )
 );
@@ -152,4 +153,35 @@ impl CifsrResponse {
     pub fn parse(input: &[u8]) -> Option<(&[u8], Self)> {
         cifsr_response(input).ok()
     }
+}
+
+
+#[test]
+fn test_parse_connect() {
+    let raw = b"1,CONNECT\r\n";
+    let event = CommandResponse::parse(raw.as_ref()).unwrap().1;
+
+    assert_eq!(event, CommandResponse::Connected { link_id: 1 })
+}
+
+#[test]
+fn test_parse_close() {
+    let raw = b"1,CLOSED\r\n";
+    let event = CommandResponse::parse(raw.as_ref()).unwrap().1;
+
+    assert_eq!(event, CommandResponse::Closed { link_id: 1 })
+}
+
+#[test]
+fn test_parse_data_available() {
+    let raw = b"+IPD,12,6:hello\r\n";
+    let event = CommandResponse::parse(raw.as_ref()).unwrap().1;
+
+    assert_eq!(
+        event,
+        CommandResponse::DataAvailable {
+            link_id: 12,
+            size: 6
+        }
+    )
 }

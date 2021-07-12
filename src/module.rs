@@ -184,7 +184,7 @@ where
         Ok(condition.output(read_data))
     }
 
-    pub(crate) fn get_softap_address(&mut self) -> Result<CifsrResponse> {
+    pub(crate) fn get_network_info(&mut self) -> Result<CifsrResponse> {
         // Get assigned SoftAP address.
         let raw_resp = self
             .send_at_command_fmt(format_args!("AT+CIFSR"))?
@@ -251,11 +251,20 @@ impl OkCondition {
     const ERROR: &'static [u8] = b"ERROR\r\n";
 }
 
+fn find_subsequence<T>(haystack: &[T], needle: &[T]) -> bool
+where
+    for<'a> &'a [T]: PartialEq,
+{
+    haystack
+        .windows(needle.len())
+        .any(|window| window == needle)
+}
+
 impl<'a, const N: usize> Condition<'a, N> for OkCondition {
     type Output = RawResponse<'a, N>;
 
     fn is_performed(self, buf: &[u8]) -> bool {
-        buf.ends_with(Self::OK) || buf.ends_with(Self::ERROR)
+        buf.ends_with(Self::OK) || find_subsequence(buf, Self::ERROR)
     }
 
     fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {

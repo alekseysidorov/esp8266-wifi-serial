@@ -1,6 +1,6 @@
 //! Reader part of the esp8266 WiFi implementation.
 
-use core::ops::Deref;
+use core::{fmt::{self, Write}, ops::Deref};
 
 use embedded_hal::serial;
 use heapless::Vec;
@@ -57,11 +57,34 @@ where
 /// Buffer with the incoming data received from the module over the serial port.
 ///
 /// A user should handle this data, otherwise, it will be discarded.
-#[derive(Debug)]
 pub struct ReadData<'a, const N: usize> {
     inner: &'a mut Vec<u8, N>,
     from: usize,
     to: usize,
+}
+
+struct PrintAscii<'a>(&'a [u8]);
+
+impl<'a> fmt::Debug for PrintAscii<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_char('"')?;
+        for byte in self.0 {
+            f.write_char(*byte as char)?;
+        }
+        f.write_char('"')?;
+
+        Ok(())
+    }
+}
+
+impl<'a, const N: usize> fmt::Debug for ReadData<'a, N> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ReadData")
+            .field("from", &self.from)
+            .field("to", &self.to)
+            .field("data", &PrintAscii(self.inner.as_ref()))
+            .finish()
+    }
 }
 
 impl<'a, const N: usize> ReadData<'a, N> {
