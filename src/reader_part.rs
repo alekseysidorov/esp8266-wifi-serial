@@ -52,10 +52,6 @@ where
             }
         }
     }
-
-    pub fn clear(&mut self) {
-        self.buf.clear()
-    }
 }
 
 /// Buffer with the incoming data received from the module over the serial port.

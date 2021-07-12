@@ -12,13 +12,54 @@ use crate::{
 /// Raw response to a sent AT command.
 pub type RawResponse<'a, const N: usize> = core::result::Result<ReadData<'a, N>, ReadData<'a, N>>;
 
+/// The trait describes how to send a certain AT command.
+pub trait AtCommand: private::Sealed {
+    /// Sends the AT command and gets a corresponding response.
+    fn send<Rx, Tx, C, const N: usize>(
+        self,
+        adapter: &mut Module<Rx, Tx, C, N>,
+    ) -> Result<RawResponse<'_, N>>
+    where
+        Rx: serial::Read<u8> + 'static,
+        Tx: serial::Write<u8> + 'static,
+        C: SimpleClock;
+}
+
+impl AtCommand for &str {
+    fn send<Rx, Tx, C, const N: usize>(
+        self,
+        adapter: &mut Module<Rx, Tx, C, N>,
+    ) -> Result<RawResponse<'_, N>>
+    where
+        Rx: serial::Read<u8> + 'static,
+        Tx: serial::Write<u8> + 'static,
+        C: SimpleClock,
+    {
+        adapter.send_at_command_str(self)
+    }
+}
+
+impl AtCommand for core::fmt::Arguments<'_> {
+    fn send<Rx, Tx, C, const N: usize>(
+        self,
+        adapter: &mut Module<Rx, Tx, C, N>,
+    ) -> Result<RawResponse<'_, N>>
+    where
+        Rx: serial::Read<u8> + 'static,
+        Tx: serial::Write<u8> + 'static,
+        C: SimpleClock,
+    {
+        adapter.send_at_command_fmt(self)
+    }
+}
+
 const NEWLINE: &[u8] = b"\r\n";
 
-/// Basic communication interface with the esp8266 adapter.
+/// Basic communication interface with the esp8266 module.
 ///
 /// Provides basic functionality for sending AT commands and getting corresponding responses.
 #[derive(Debug)]
-pub struct Adapter<Rx, Tx, C, const N: usize>
+pub struct Module<Rx, Tx, C, const N: usize>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
@@ -30,13 +71,13 @@ where
     pub(crate) timeout: Option<u64>,
 }
 
-impl<'a, Rx, Tx, C, const N: usize> Adapter<Rx, Tx, C, N>
+impl<'a, Rx, Tx, C, const N: usize> Module<Rx, Tx, C, N>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    /// Establishes serial communication with the esp8266 adapter.
+    /// Establishes serial communication with the esp8266 module.
     pub fn new(rx: Rx, tx: Tx, clock: C) -> Result<Self> {
         let mut adapter = Self {
             reader: ReaderPart::new(rx),
@@ -80,17 +121,17 @@ where
         Ok(())
     }
 
-    /// Sends a simple AT command string and gets the raw response for it.
-    pub fn send_at_command_str(&mut self, cmd: &str) -> Result<RawResponse<'_, N>> {
+    /// Sends an AT command and gets the response for it.
+    pub fn send_at_command<T: AtCommand>(&mut self, cmd: T) -> Result<RawResponse<'_, N>> {
+        cmd.send(self)
+    }
+
+    fn send_at_command_str(&mut self, cmd: &str) -> Result<RawResponse<'_, N>> {
         self.write_command(cmd.as_ref())?;
         self.read_until(OkCondition)
     }
 
-    /// Sends a formatted AT command string and gets the raw response for it.
-    pub fn send_at_command_fmt(
-        &mut self,
-        args: core::fmt::Arguments,
-    ) -> Result<RawResponse<'_, N>> {
+    fn send_at_command_fmt(&mut self, args: core::fmt::Arguments) -> Result<RawResponse<'_, N>> {
         self.write_command_fmt(args)?;
         self.read_until(OkCondition)
     }
@@ -99,7 +140,7 @@ where
         self.send_at_command_str("ATE0").map(drop)
     }
 
-    pub(crate) fn write_command(&mut self, cmd: &[u8]) -> Result<()> {
+    fn write_command(&mut self, cmd: &[u8]) -> Result<()> {
         self.writer.write_bytes(cmd)?;
         self.writer.write_bytes(NEWLINE)
     }
@@ -253,4 +294,11 @@ where
         }
         Ok(())
     }
+}
+
+mod private {
+    pub trait Sealed {}
+
+    impl Sealed for &str {}
+    impl Sealed for core::fmt::Arguments<'_> {}
 }

@@ -6,41 +6,40 @@ use no_std_net::SocketAddr;
 use simple_clock::SimpleClock;
 
 use crate::{
-    adapter::{Adapter, CarretCondition, OkCondition},
+    module::{Module, CarretCondition, OkCondition},
     parser::CommandResponse,
     reader_part::{ReadData, ReaderPart},
     Error,
 };
 
-pub struct WifiSession<Rx, Tx, C, const N: usize>
+pub struct NetworkSession<Rx, Tx, C, const N: usize>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    adapter: Adapter<Rx, Tx, C, N>,
+    module: Module<Rx, Tx, C, N>,
 }
 
-impl<Rx, Tx, C, const N: usize> WifiSession<Rx, Tx, C, N>
+impl<Rx, Tx, C, const N: usize> NetworkSession<Rx, Tx, C, N>
 where
     Rx: serial::Read<u8> + 'static,
     Tx: serial::Write<u8> + 'static,
     C: SimpleClock,
 {
-    pub(crate) fn new(mut adapter: Adapter<Rx, Tx, C, N>) -> Self {
-        adapter.reader.clear();
-        Self { adapter }
+    pub(crate) fn new(module: Module<Rx, Tx, C, N>) -> Self {
+        Self { module }
     }
 
     pub fn listen(&mut self, port: u16) -> crate::Result<SocketAddr> {
         // Setup a TCP server.
-        self.adapter
-            .send_at_command_fmt(format_args!("AT+CIPSERVER=1,{}", port))?
+        self.module
+            .send_at_command(format_args!("AT+CIPSERVER=1,{}", port))?
             .expect("Malformed command");
 
         // Get assigned IP address.
         let ip = self
-            .adapter
+            .module
             .get_softap_address()?
             .ap_ip
             .expect("the IP address for this access point did't assign.");
@@ -48,8 +47,8 @@ where
     }
 
     pub fn connect_to(&mut self, link_id: usize, address: SocketAddr) -> crate::Result<()> {
-        self.adapter
-            .send_at_command_fmt(format_args!(
+        self.module
+            .send_at_command(format_args!(
                 "AT+CIPSTART={},\"{}\",\"{}\",{}",
                 link_id,
                 "TCP",
@@ -61,7 +60,7 @@ where
         Ok(())
     }
 
-    pub fn poll_next_event(&mut self) -> nb::Result<Event<'_, N>, Error> {
+    pub fn poll_network_event(&mut self) -> nb::Result<NetworkEvent<'_, N>, Error> {
         let reader = self.reader_mut();
 
         let response =
@@ -72,8 +71,8 @@ where
             truncate_buf(reader.buf_mut(), pos);
 
             let event = match response {
-                CommandResponse::Connected { link_id } => Event::Connected { link_id },
-                CommandResponse::Closed { link_id } => Event::Closed { link_id },
+                CommandResponse::Connected { link_id } => NetworkEvent::Connected { link_id },
+                CommandResponse::Closed { link_id } => NetworkEvent::Closed { link_id },
                 CommandResponse::DataAvailable { link_id, size } => {
                     let current_pos = reader.buf().len();
                     for _ in current_pos..size {
@@ -81,7 +80,7 @@ where
                         reader.buf_mut().push(byte).map_err(|_| Error::BufferFull)?;
                     }
 
-                    Event::DataAvailable {
+                    NetworkEvent::DataAvailable {
                         link_id,
                         data: ReadData::new(reader.buf_mut()),
                     }
@@ -108,38 +107,38 @@ where
         );
         assert!(self.reader().buf().is_empty());
 
-        self.adapter
+        self.module
             .write_command_fmt(format_args!("AT+CIPSEND={},{}", link_id, bytes_len))?;
-        self.adapter.read_until(CarretCondition)?;
+        self.module.read_until(CarretCondition)?;
 
         for byte in bytes {
-            nb::block!(self.adapter.writer.write_byte(byte))?;
+            nb::block!(self.module.writer.write_byte(byte))?;
         }
 
-        self.adapter
+        self.module
             .read_until(OkCondition)?
             .expect("Malformed command");
         Ok(())
     }
 
     pub fn clock(&self) -> &C {
-        &self.adapter.clock
+        &self.module.clock
     }
 
     pub fn timeout(&self) -> Option<u64> {
-        self.adapter.timeout
+        self.module.timeout
     }
 
     fn reader(&self) -> &ReaderPart<Rx, N> {
-        &self.adapter.reader
+        &self.module.reader
     }
 
     fn reader_mut(&mut self) -> &mut ReaderPart<Rx, N> {
-        &mut self.adapter.reader
+        &mut self.module.reader
     }
 }
 
-pub enum Event<'a, const N: usize> {
+pub enum NetworkEvent<'a, const N: usize> {
     Connected {
         link_id: usize,
     },
