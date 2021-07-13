@@ -258,37 +258,24 @@ impl OkCondition {
     const FAIL: &'static [u8] = b"FAIL\r\n";
 }
 
-fn find_subsequence<T>(haystack: &[T], needle: &[T]) -> Option<usize>
-where
-    for<'a> &'a [T]: PartialEq,
-{
-    haystack
-        .windows(needle.len())
-        .position(|window| window == needle)
-}
-
 // TODO optimize this condition.
 impl<'a, const N: usize> Condition<'a, N> for OkCondition {
     type Output = RawResponse<'a, N>;
 
     fn is_performed(self, buf: &[u8]) -> bool {
-        find_subsequence(buf, Self::OK).is_some()
-            || find_subsequence(buf, Self::ERROR).is_some()
-            || find_subsequence(buf, Self::FAIL).is_some()
+        buf.ends_with(Self::OK) || buf.ends_with(Self::ERROR) || buf.ends_with(Self::FAIL)
     }
 
     fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {
-        if let Some(pos) = find_subsequence(&buf, Self::OK) {
-            buf.subslice(0, pos);
-            Ok(buf)
-        } else if let Some(pos) = find_subsequence(&buf, Self::ERROR) {
-            buf.subslice(0, pos);
-            Ok(buf)
+        if buf.ends_with(Self::OK) {
+            buf.subslice(0, buf.len() - Self::OK.len());
+        } else if buf.ends_with(Self::ERROR) {
+            buf.subslice(0, buf.len() - Self::ERROR.len());
         } else {
-            let pos = find_subsequence(&buf, Self::FAIL).unwrap();
-            buf.subslice(0, pos);
-            Err(buf)
+            buf.subslice(0, buf.len() - Self::FAIL.len());
         }
+
+        Ok(buf)
     }
 }
 
