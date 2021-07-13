@@ -1,6 +1,7 @@
 use core::fmt::Write;
 
 use embedded_hal::serial;
+use no_stdout::uprintln;
 use simple_clock::{Deadline, ElapsedTimer, SimpleClock};
 
 use crate::{
@@ -192,9 +193,10 @@ where
 
     pub(crate) fn get_network_info(&mut self) -> Result<CifsrResponse> {
         // Get assigned SoftAP address.
-        let raw_resp = self
-            .send_at_command_fmt(format_args!("AT+CIFSR"))?
-            .expect("Malformed command");
+        let raw_resp = self.send_at_command("AT+CIFSR")?;
+        uprintln!("{:?}", raw_resp);
+
+        let raw_resp = raw_resp.expect("Malformed command");
 
         let resp = CifsrResponse::parse(&raw_resp).expect("Unknown response").1;
         Ok(resp)
