@@ -1,5 +1,12 @@
 #![cfg_attr(not(test), no_std)]
 
+//! Driver to working with the esp8266 module over the serial port.
+//! 
+//! # Warning 
+//! 
+//! This library is not completed and lack core features and has a lot of bugs and imperfections.
+//! And so, it is not ready for production purposes.
+
 pub use crate::{
     module::{Module, AtCommand},
     error::{Error, Result},
