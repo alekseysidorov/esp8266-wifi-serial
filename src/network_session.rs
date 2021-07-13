@@ -15,7 +15,7 @@ use crate::{
 #[derive(Debug, PartialEq, Eq)]
 pub struct SessionInfo {
     pub softap_address: Option<IpAddr>,
-    pub listen_address: IpAddr,
+    pub listen_address: Option<IpAddr>,
 }
 
 /// A session with the typical network operations.

@@ -64,7 +64,7 @@ fn integration_test_joinap_ok() {
     std::thread::sleep(Duration::from_millis(50));
 
     let addr = SocketAddr::new(
-        IpAddr::from_str(&info.listen_address.to_string()).unwrap(),
+        IpAddr::from_str(&info.listen_address.unwrap().to_string()).unwrap(),
         2048,
     );
     let mut socket = TcpStream::connect(addr).expect("unable to connect with device");

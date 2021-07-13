@@ -95,7 +95,7 @@ impl CommandResponse {
 
 pub struct CifsrResponse {
     pub ap_ip: Option<IpAddr>,
-    pub sta_ip: IpAddr,
+    pub sta_ip: Option<IpAddr>,
 }
 
 named!(
@@ -144,7 +144,7 @@ named!(
     do_parse!(
         opt!(crlf)
             >> ap_ip: opt!(parse_apip)
-            >> sta_ip: parse_staip
+            >> sta_ip: opt!(parse_staip)
             >> (CifsrResponse { ap_ip, sta_ip })
     )
 );
