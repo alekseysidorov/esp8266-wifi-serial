@@ -82,7 +82,7 @@ impl<'a, const N: usize> fmt::Debug for ReadData<'a, N> {
         f.debug_struct("ReadData")
             .field("from", &self.from)
             .field("to", &self.to)
-            .field("data", &PrintAscii(self.inner.as_ref()))
+            .field("data", &PrintAscii(self.as_ref()))
             .finish()
     }
 }

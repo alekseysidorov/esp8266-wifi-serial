@@ -11,6 +11,8 @@ pub enum Error {
     BufferFull,
     /// Operation timeout reached.
     Timeout,
+    /// Unable to join selected access point.
+    JoinApError,
 }
 
 /// A specialized result type for the operations with the esp8266 module.

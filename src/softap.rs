@@ -4,7 +4,7 @@ use embedded_hal::serial;
 use serde::{Deserialize, Serialize};
 use simple_clock::SimpleClock;
 
-use crate::{Module, NetworkSession};
+use crate::{Error, Module, NetworkSession};
 
 /// Wifi modes that supported by this module.
 #[repr(u8)]
@@ -131,7 +131,8 @@ impl<'a> JoinApConfig<'a> {
                 "AT+CWJAP=\"{}\",\"{}\"",
                 self.ssid, self.password,
             ))?
-            .expect("Malformed command");
+            // .expect("Malformed command");
+            .map_err(|_| Error::JoinApError)?;
 
         Ok(())
     }

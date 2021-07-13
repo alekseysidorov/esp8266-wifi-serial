@@ -19,6 +19,7 @@ pub struct SessionInfo {
 }
 
 /// A session with the typical network operations.
+#[derive(Debug)]
 pub struct NetworkSession<Rx, Tx, C, const N: usize>
 where
     Rx: serial::Read<u8> + 'static,

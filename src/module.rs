@@ -1,13 +1,15 @@
 use core::fmt::Write;
 
 use embedded_hal::serial;
-use simple_clock::{Deadline, SimpleClock};
+use simple_clock::{Deadline, ElapsedTimer, SimpleClock};
 
 use crate::{
     error::{Error, Result},
     parser::CifsrResponse,
     reader_part::{ReadData, ReaderPart},
 };
+
+const RESET_DELAY_US: u64 = 2_000_000;
 
 /// Raw response to a sent AT command.
 pub type RawResponse<'a, const N: usize> = core::result::Result<ReadData<'a, N>, ReadData<'a, N>>;
@@ -97,6 +99,13 @@ where
 
     fn reset_cmd(&mut self) -> Result<()> {
         self.write_command(b"AT+RST")?;
+
+        // Workaround to ignore the framing errors.
+        let timer = ElapsedTimer::new(&self.clock);
+        while timer.elapsed() < RESET_DELAY_US {
+            core::hint::spin_loop();
+        }
+
         self.read_until(ReadyCondition)?;
 
         Ok(())
@@ -113,10 +122,7 @@ where
     pub fn reset(&mut self) -> Result<()> {
         // FIXME: It is ok to receive errors like "framing" during the reset procedure.
         self.reset_cmd().ok();
-        // Workaround to catch the framing errors.
-        for _ in 0..100 {
-            self.send_at_command_str("ATE1").ok();
-        }
+        self.reader.buf_mut().clear();
 
         self.disable_echo()?;
         Ok(())
@@ -249,30 +255,38 @@ pub(crate) struct OkCondition;
 impl OkCondition {
     const OK: &'static [u8] = b"OK\r\n";
     const ERROR: &'static [u8] = b"ERROR\r\n";
+    const FAIL: &'static [u8] = b"FAIL\r\n";
 }
 
-fn find_subsequence<T>(haystack: &[T], needle: &[T]) -> bool
+fn find_subsequence<T>(haystack: &[T], needle: &[T]) -> Option<usize>
 where
     for<'a> &'a [T]: PartialEq,
 {
     haystack
         .windows(needle.len())
-        .any(|window| window == needle)
+        .position(|window| window == needle)
 }
 
+// TODO optimize this condition.
 impl<'a, const N: usize> Condition<'a, N> for OkCondition {
     type Output = RawResponse<'a, N>;
 
     fn is_performed(self, buf: &[u8]) -> bool {
-        buf.ends_with(Self::OK) || find_subsequence(buf, Self::ERROR)
+        find_subsequence(buf, Self::OK).is_some()
+            || find_subsequence(buf, Self::ERROR).is_some()
+            || find_subsequence(buf, Self::FAIL).is_some()
     }
 
     fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {
-        if buf.ends_with(Self::OK) {
-            buf.subslice(0, buf.len() - Self::OK.len());
+        if let Some(pos) = find_subsequence(&buf, Self::OK) {
+            buf.subslice(0, pos);
+            Ok(buf)
+        } else if let Some(pos) = find_subsequence(&buf, Self::ERROR) {
+            buf.subslice(0, pos);
             Ok(buf)
         } else {
-            buf.subslice(0, buf.len() - Self::ERROR.len());
+            let pos = find_subsequence(&buf, Self::FAIL).unwrap();
+            buf.subslice(0, pos);
             Err(buf)
         }
     }

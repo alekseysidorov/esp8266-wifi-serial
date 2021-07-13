@@ -1,4 +1,10 @@
-use std::{cell::{Ref, RefCell, RefMut}, fmt::Debug, io, rc::Rc, sync::{Mutex, MutexGuard}};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    fmt::{self, Debug},
+    io,
+    rc::Rc,
+    sync::{Mutex, MutexGuard},
+};
 
 use embedded_hal::serial::{Read, Write};
 use esp8266_wifi_serial::{clock::SimpleClock, Module};
@@ -8,9 +14,10 @@ use serialport::SerialPort;
 const BAUD_RATE: u32 = 115200;
 const ADAPTER_BUF_CAPACITY: usize = 2048;
 
-const DEFAULT_TIMEOUT_US: u64 = 15_000_000;
-const RESET_TIMEOUT_US: u64 = 500_000;
+const DEFAULT_TIMEOUT_US: u64 = 30_000_000;
+const RESET_TIMEOUT_US: u64 = 250_000;
 
+#[derive(Debug)]
 struct ClockImpl;
 
 static ONCE_LOCK: Lazy<Mutex<()>> = Lazy::new(Mutex::default);
@@ -33,6 +40,12 @@ impl SimpleClock for ClockImpl {
 struct SerialPortWrapper {
     guard: Rc<MutexGuard<'static, ()>>,
     inner: Rc<RefCell<Box<dyn SerialPort>>>,
+}
+
+impl Debug for SerialPortWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SerialPortWrapper").finish()
+    }
 }
 
 impl SerialPortWrapper {
@@ -101,9 +114,9 @@ fn default_serial_port() -> anyhow::Result<SerialPortWrapper> {
 
 pub fn default_esp8266_serial_module() -> anyhow::Result<
     Module<
-        impl Read<u8, Error = io::Error>,
-        impl Write<u8, Error = io::Error>,
-        impl SimpleClock,
+        impl Read<u8, Error = io::Error> + Debug,
+        impl Write<u8, Error = io::Error> + Debug,
+        impl SimpleClock + Debug,
         ADAPTER_BUF_CAPACITY,
     >,
 > {
@@ -116,4 +129,8 @@ pub fn default_esp8266_serial_module() -> anyhow::Result<
     module.set_timeout(Some(DEFAULT_TIMEOUT_US));
 
     Ok(module)
+}
+
+pub fn necessary_env_var(name: &str) -> String {
+    std::env::var(name).unwrap_or_else(|_| panic!("a `{}` variable is necessary.", name))
 }
