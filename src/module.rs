@@ -195,7 +195,9 @@ where
         let res = self.send_at_command("AT+CIFSR")?;
         let raw_resp = res.expect("Malformed command");
 
-        let resp = CifsrResponse::parse(&raw_resp).expect("Unknown response").1;
+        let resp = CifsrResponse::parse(&raw_resp)
+            .unwrap_or_else(|| panic!("Unable to parse response: {:?}", raw_resp))
+            .1;
         Ok(resp)
     }
 }
