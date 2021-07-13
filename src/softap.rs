@@ -6,7 +6,7 @@ use simple_clock::SimpleClock;
 
 use crate::{Error, Module, NetworkSession};
 
-/// Wifi modes that supported by this module.
+/// WiFi modes that supported by this module.
 #[repr(u8)]
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Eq)]
 pub enum WifiMode {
