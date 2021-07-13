@@ -155,7 +155,6 @@ impl CifsrResponse {
     }
 }
 
-
 #[test]
 fn test_parse_connect() {
     let raw = b"1,CONNECT\r\n";

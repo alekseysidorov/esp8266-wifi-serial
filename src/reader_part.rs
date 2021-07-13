@@ -1,6 +1,9 @@
 //! Reader part of the esp8266 WiFi implementation.
 
-use core::{fmt::{self, Write}, ops::Deref};
+use core::{
+    fmt::{self, Write},
+    ops::Deref,
+};
 
 use embedded_hal::serial;
 use heapless::Vec;

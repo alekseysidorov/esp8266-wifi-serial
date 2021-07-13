@@ -131,7 +131,6 @@ impl<'a> JoinApConfig<'a> {
                 "AT+CWJAP=\"{}\",\"{}\"",
                 self.ssid, self.password,
             ))?
-            // .expect("Malformed command");
             .map_err(|_| Error::JoinApError)?;
 
         Ok(())

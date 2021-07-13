@@ -9,7 +9,7 @@ use crate::{
     reader_part::{ReadData, ReaderPart},
 };
 
-const RESET_DELAY_US: u64 = 2_000_000;
+const RESET_DELAY_US: u64 = 3_000_000;
 
 /// Raw response to a sent AT command.
 pub type RawResponse<'a, const N: usize> = core::result::Result<ReadData<'a, N>, ReadData<'a, N>>;
@@ -122,7 +122,10 @@ where
     pub fn reset(&mut self) -> Result<()> {
         // FIXME: It is ok to receive errors like "framing" during the reset procedure.
         self.reset_cmd().ok();
-        self.reader.buf_mut().clear();
+        // Workaround to catch the framing errors.
+        for _ in 0..100 {
+            self.send_at_command_str("ATE1").ok();
+        }
 
         self.disable_echo()?;
         Ok(())
@@ -270,13 +273,14 @@ impl<'a, const N: usize> Condition<'a, N> for OkCondition {
     fn output(self, mut buf: ReadData<'a, N>) -> Self::Output {
         if buf.ends_with(Self::OK) {
             buf.subslice(0, buf.len() - Self::OK.len());
+            Ok(buf)
         } else if buf.ends_with(Self::ERROR) {
             buf.subslice(0, buf.len() - Self::ERROR.len());
+            Err(buf)
         } else {
             buf.subslice(0, buf.len() - Self::FAIL.len());
+            Err(buf)
         }
-
-        Ok(buf)
     }
 }
 

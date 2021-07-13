@@ -6,12 +6,13 @@ use simple_clock::SimpleClock;
 
 use crate::{
     module::{CarretCondition, Module, OkCondition},
+    net::{IpAddr, SocketAddr},
     parser::CommandResponse,
     reader_part::{ReadData, ReaderPart},
     Error,
-    net::{IpAddr, SocketAddr},
 };
 
+/// Network session information.
 #[derive(Debug, PartialEq, Eq)]
 pub struct SessionInfo {
     pub softap_address: Option<IpAddr>,
@@ -138,7 +139,7 @@ where
         let info = self.module.get_network_info()?;
         Ok(SessionInfo {
             softap_address: info.ap_ip,
-            listen_address: info.sta_ip
+            listen_address: info.sta_ip,
         })
     }
 

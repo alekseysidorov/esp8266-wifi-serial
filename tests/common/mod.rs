@@ -15,7 +15,7 @@ const BAUD_RATE: u32 = 115200;
 const ADAPTER_BUF_CAPACITY: usize = 2048;
 
 const DEFAULT_TIMEOUT_US: u64 = 30_000_000;
-const RESET_TIMEOUT_US: u64 = 250_000;
+const RESET_TIMEOUT_US: u64 = 200_000;
 
 #[derive(Debug)]
 struct ClockImpl;
