@@ -83,7 +83,7 @@ where
                 CommandResponse::Closed { link_id } => NetworkEvent::Closed { link_id },
                 CommandResponse::DataAvailable { link_id, size } => {
                     let current_pos = reader.buf().len();
-                    for _ in current_pos..size {
+                    for _ in current_pos..size as usize {
                         let byte = nb::block!(reader.read_byte())?;
                         reader.buf_mut().push(byte).map_err(|_| Error::BufferFull)?;
                     }
@@ -168,17 +168,17 @@ pub enum NetworkEvent<'a, const N: usize> {
     /// A new peer connected.
     Connected {
         /// Connection identifier.
-        link_id: usize,
+        link_id: u16,
     },
     /// The connection with the peer is closed.
     Closed {
         /// Connection identifier.
-        link_id: usize,
+        link_id: u16,
     },
     /// Bytes received from the peer.
     DataAvailable {
         /// Connection identifier.
-        link_id: usize,
+        link_id: u16,
         /// Received data.
         data: ReadData<'a, N>,
     },
