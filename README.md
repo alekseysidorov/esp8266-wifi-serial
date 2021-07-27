@@ -9,8 +9,7 @@
 By using this module you can join the existing access point or creating your own. After a network creation, the module can both listen to incoming TCP connections or connect to other sockets.
 
 ```rust
-let mut module = Module::new(rx, tx, clock)
-    .expect("unable to create module");
+let mut module = Module::new(rx, tx, clock).expect("unable to create module");
 // Create a new access point.
 let mut session = SoftApConfig {
     ssid: "test_network",
@@ -24,8 +23,7 @@ let mut session = SoftApConfig {
 session.listen(2048).unwrap();
 // Start an event loop.
 loop {
-    let event = nb::block!(session.poll_network_event())
-        .expect("unable to poll network event");
+    let event = nb::block!(session.poll_network_event()).expect("unable to poll network event");
     // Some business logic.
 }
 ```
