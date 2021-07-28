@@ -4,6 +4,12 @@ version = "0.1.0"
 authors = ["Aleksei Sidorov <gorthauer87@yandex.ru>"]
 edition = "2018"
 
+description = "A driver to work with the esp8266 module over the serial port."
+documentation = "https://docs.rs/esp8266-wifi-serial/"
+repository = "https://github.com/alekseysidorov/esp8266-wifi-serial"
+keywords = ["no_std", "esp8266", "wifi", "driver", "network"]
+categories = ["no-std", "embedded", "network-programming"]
+
 [dependencies]
 atoi = "0.4.0"
 embedded-hal = "0.2"
