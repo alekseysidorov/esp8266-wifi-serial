@@ -1,6 +1,6 @@
 [package]
 name = "esp8266-wifi-serial"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Aleksei Sidorov <gorthauer87@yandex.ru>"]
 edition = "2018"
 
