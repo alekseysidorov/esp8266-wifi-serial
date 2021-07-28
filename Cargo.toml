@@ -4,6 +4,7 @@ version = "0.1.0"
 authors = ["Aleksei Sidorov <gorthauer87@yandex.ru>"]
 edition = "2018"
 
+license = "MIT OR Apache-2.0"
 description = "A driver to work with the esp8266 module over the serial port."
 documentation = "https://docs.rs/esp8266-wifi-serial/"
 repository = "https://github.com/alekseysidorov/esp8266-wifi-serial"
