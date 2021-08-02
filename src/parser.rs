@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use core::str::FromStr;
 
 use nom::{alt, char, character::streaming::digit1, do_parse, named, opt, tag, IResult};
 

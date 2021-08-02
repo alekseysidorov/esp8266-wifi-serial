@@ -1,4 +1,4 @@
-// #![cfg_attr(not(test), no_std)]
+#![cfg_attr(not(test), no_std)]
 
 //! Driver to working with the esp8266 module over the serial port.
 //!
