@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use nom::{alt, char, character::streaming::digit1, do_parse, named, opt, tag, IResult};
 
 use crate::net::{IpAddr, Ipv4Addr};
@@ -14,21 +16,26 @@ fn parse_error(input: &[u8]) -> nom::Err<nom::error::Error<&[u8]>> {
     nom::Err::Error(nom::error::Error::new(input, nom::error::ErrorKind::Digit))
 }
 
+fn atoi<T: FromStr>(input: &[u8]) -> Result<T, nom::Err<nom::error::Error<&[u8]>>> {
+    let s = core::str::from_utf8(input).map_err(|_| parse_error(input))?;
+    s.parse().map_err(|_| parse_error(input))
+}
+
 fn parse_link_id(input: &[u8]) -> IResult<&[u8], u16> {
     let (input, digits) = digit1(input)?;
-    let num = atoi::atoi(digits).ok_or_else(|| parse_error(input))?;
+    let num = atoi(digits)?;
     IResult::Ok((input, num))
 }
 
 fn parse_u64(input: &[u8]) -> IResult<&[u8], u64> {
     let (input, digits) = digit1(input)?;
-    let num = atoi::atoi(digits).ok_or_else(|| parse_error(input))?;
+    let num = atoi(digits)?;
     IResult::Ok((input, num))
 }
 
 fn parse_u8(input: &[u8]) -> IResult<&[u8], u8> {
     let (input, digits) = digit1(input)?;
-    let num = atoi::atoi(digits).ok_or_else(|| parse_error(input))?;
+    let num = atoi(digits)?;
     IResult::Ok((input, num))
 }
 

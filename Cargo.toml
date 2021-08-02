@@ -1,6 +1,6 @@
 [package]
 name = "esp8266-wifi-serial"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Aleksei Sidorov <gorthauer87@yandex.ru>"]
 edition = "2018"
 
@@ -12,7 +12,6 @@ keywords = ["no_std", "esp8266", "wifi", "driver", "network"]
 categories = ["no-std", "embedded", "network-programming"]
 
 [dependencies]
-atoi = "0.4.0"
 embedded-hal = "0.2"
 heapless = "0.7"
 nb = "1"
